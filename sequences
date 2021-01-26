@@ -1,0 +1,2 @@
+#!/use/bin/env ruby
+require File.expand_path(File.join(__FILE__, %w(.. lib environment)))

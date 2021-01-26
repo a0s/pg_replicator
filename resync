@@ -1,0 +1,89 @@
+#!/use/bin/env ruby
+require File.expand_path(File.join(__FILE__, %w(.. lib environment)))
+
+class ResyncSchema
+  def initialize(cli:)
+    @cli = cli
+    @target_connection = Sequel.connect(cli.dest_control_url)
+  end
+
+  def yesno(prompt = 'Continue?', default = false)
+    a = ''
+    s = default ? '[Y/n]' : '[y/N]'
+    d = default ? 'y' : 'n'
+    until %w[y n].include? a
+      a = ask("#{prompt} #{s} ") { |q| q.limit = 1; q.case = :downcase }
+      a = d if a.length == 0
+    end
+    a == 'y'
+  end
+
+  # Drop database on target or exit
+  def drop_target!
+    target_databases = @target_connection.fetch("SELECT datname FROM pg_database").map { |e| e[:datname] }
+    drop_on_target = @cli.src_databases & target_databases
+    if drop_on_target.present?
+      exit unless yesno("\nWill drop databases on #{@cli.dest_host}:\n#{drop_on_target.join("\n")}\nOk?", false)
+      drop_on_target.each do |db_name|
+        @target_connection.run("DROP DATABASE #{db_name}")
+        puts "Dropped #{db_name}"
+      end
+    end
+  end
+
+  def migrate_scheme!
+    @cli.src_databases.each do |src_db_name|
+      env = { 'PGPASSWORD' => @cli.src_password }
+      cmd = %W(
+        pg_dump
+        --schema-only
+        --no-owner
+        --no-privileges
+        --exclude-schema=pglogical
+        --host=#{@cli.src_host}
+        --port=#{@cli.src_port}
+        --user=#{@cli.src_user}
+      #{src_db_name}
+      )
+
+      puts "Dumping from #{src_db_name} at #{@cli.src_host} with: `#{cmd.join(' ')}`"
+      stdout, status = Open3.capture2(env, *cmd)
+      unless status.success?
+        puts stdout
+        exit status.exitstatus
+      end
+      # TODO: проверить status
+      puts "Dumped #{stdout.bytesize} bytes from #{src_db_name} at #{@cli.src_host}"
+
+      Tempfile.open('foo') do |file|
+        File.write(file.path, stdout)
+
+        @target_connection.run("CREATE DATABASE #{src_db_name}")
+
+        env = { 'PGPASSWORD' => @cli.dest_password }
+        cmd = %W(
+          psql
+          --set ON_ERROR_STOP=on
+          --host=#{@cli.dest_host}
+          --port=#{@cli.dest_port}
+          --user=#{@cli.dest_user}
+          --file=#{file.path}
+        #{src_db_name}
+        )
+
+        puts "Restoring to #{src_db_name} at #{@cli.dest_host} with: `#{cmd.join(' ')}`"
+        stdout, status = Open3.capture2(env, *cmd)
+        unless status.success?
+          puts stdout
+          exit status.exitstatus
+        end
+        puts "Restored to #{src_db_name} at #{@cli.dest_host}"
+      end
+    end
+  end
+end
+
+cli = Cli.new.parse
+rs = ResyncSchema.new(cli: cli)
+rs.drop_target!
+rs.migrate_scheme!

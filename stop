@@ -1,0 +1,10 @@
+#!/use/bin/env ruby
+require './lib/environment'
+require './lib/replication'
+
+cli = Cli.new.parse
+rp = Replication.new(cli: cli)
+cli.src_databases.each do |db_name|
+  rp.stop_subscription(db_name)
+  rp.stop_publication(db_name)
+end
