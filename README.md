@@ -22,7 +22,7 @@ pg_replicator
 - `--src-password` - пароль пользователя
 - `--dest-host` - хост приемника
 - `--dest-port` - порт приемника
-- `--dest-user` - юзер приемника, должен уметь `CREATE DATABASE`, `CREATE SUBSCRIPTION`
+- `--dest-user` - юзер приемника, должен уметь `CREATE DATABASE`, `CREATE SUBSCRIPTION`, 'UPDATE SEQUENCE' и тд
 - `--dest-password` - пароль пользователя
 
 Все параметры одинаковы для всех команд
