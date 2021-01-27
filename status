@@ -2,8 +2,19 @@
 require './lib/environment'
 
 cli = Cli.new.parse
-dst = Sequel.connect("postgres://#{cli.dest_user}:#{cli.dest_password}@#{cli.dest_host}:#{cli.dest_port}/postgres")
-stat = dst.fetch("SELECT subid,subname,received_lsn,latest_end_lsn,latest_end_time FROM pg_stat_subscription")
+dest = Sequel.connect("postgres://#{cli.dest_user}:#{cli.dest_password}@#{cli.dest_host}:#{cli.dest_port}/postgres")
+
+# Db sizes
+src = Sequel.connect("postgres://#{cli.src_user}:#{cli.src_password}@#{cli.src_host}:#{cli.src_port}/postgres")
+cli.src_databases.each do |db_name|
+  src_size = src.fetch("SELECT pg_database_size('#{db_name}') as size").first[:size]
+  dest_size = dest.fetch("SELECT pg_database_size('#{db_name}') as size").first[:size]
+  puts "#{db_name}\tsrc #{src_size} / dest #{dest_size} -> #{ dest_size.to_f / src_size.to_f * 100 }%"
+end
+puts
+
+# Global replication slots
+stat = dest.fetch("SELECT subid,subname,received_lsn,latest_end_lsn,latest_end_time FROM pg_stat_subscription")
 stat.each do |row|
   puts "#{row[:subid]}\t#{row[:subname]}\t#{row[:latest_end_time]}\t#{row[:received_lsn]}\t#{row[:latest_end_lsn]}"
 end

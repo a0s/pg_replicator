@@ -1,0 +1,9 @@
+#!/use/bin/env ruby
+require File.expand_path(File.join(__FILE__, %w(.. lib environment)))
+
+cli = Cli.new.parse
+rp = Replication9.new(cli: cli)
+cli.src_databases.each do |db_name|
+  rp.start_publication(db_name)
+  rp.start_subscription(db_name)
+end
