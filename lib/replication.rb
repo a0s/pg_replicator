@@ -15,7 +15,7 @@ class Replication
     Sequel.connect("postgres://#{@cli.dest_user}:#{@cli.dest_password}@#{@cli.dest_host}:#{@cli.dest_port}/#{db_name}")
   end
 
-  # AR SRC
+  # AT SRC
   def start_publication(db_name)
     pub_name = name(db_name)
     src_conn = src_conn(db_name)
@@ -31,7 +31,7 @@ class Replication
     src_conn.run(sql)
   end
 
-  # AR SRC
+  # AT SRC
   def stop_publication(db_name)
     pub_name = name(db_name)
     src_conn = src_conn(db_name)

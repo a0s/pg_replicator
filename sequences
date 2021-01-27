@@ -1,2 +1,16 @@
 #!/use/bin/env ruby
 require File.expand_path(File.join(__FILE__, %w(.. lib environment)))
+
+cli = Cli.new.parse
+cli.src_databases.each do |db_name|
+  puts "\ndb_name=#{db_name}"
+
+  src = Sequel.connect("postgres://#{cli.src_user}:#{cli.src_password}@#{cli.src_host}:#{cli.src_port}/#{db_name}")
+  dest = Sequel.connect("postgres://#{cli.dest_user}:#{cli.dest_password}@#{cli.dest_host}:#{cli.dest_port}/#{db_name}")
+
+  res = src.fetch("SELECT * FROM pg_sequences WHERE last_value IS NOT NULL")
+  res.each do |r|
+    dest.run("SELECT setval('#{r[:sequencename]}', #{r[:last_value]})")
+    puts "#{r[:sequencename]}\t#{r[:last_value]}"
+  end
+end
