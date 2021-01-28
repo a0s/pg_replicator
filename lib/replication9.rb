@@ -19,6 +19,23 @@ class Replication9 < Replication
     "#{sub_name}_dest"
   end
 
+  def tables_without_primary_key
+    <<-EOS
+      select tab.table_schema,
+       tab.table_name
+      from information_schema.tables tab
+      left join information_schema.table_constraints tco 
+                on tab.table_schema = tco.table_schema
+                and tab.table_name = tco.table_name 
+                and tco.constraint_type = 'PRIMARY KEY'
+      where tab.table_type = 'BASE TABLE'
+            and tab.table_schema not in ('pg_catalog', 'information_schema')
+            and tco.constraint_name is null
+      order by table_schema,
+               table_name;
+    EOS
+  end
+
   # AT SRC
   def start_publication(db_name)
     pub_name = name(db_name)
@@ -43,8 +60,17 @@ class Replication9 < Replication
       src_conn.run(sql)
     end
 
-    sql = "SELECT pglogical.replication_set_add_all_tables('#{pub_name}', ARRAY['public']);"
-    src_conn.run(sql)
+    sql  = "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';"
+    tables = src_conn.fetch(sql).map { |s| s[:table_name] }
+
+    exclude_tables = src_conn.fetch(tables_without_primary_key).map { |s| s[:table_name] }
+    puts "!!!! (no primary key) SKIP TABLES: #{exclude_tables.join(',')}"
+
+    (tables - exclude_tables).each do |table|
+      sql = "SELECT pglogical.replication_set_add_table('#{pub_name}', '#{table}')"
+      puts "Add table '#{table}' into replication set #{pub_name} in #{db_name} at #{@cli.src_host}: `#{sql}`"
+      src_conn.run(sql)
+    end
   end
 
   # AT SRC
@@ -88,16 +114,6 @@ class Replication9 < Replication
       puts "Create subscription #{sub_name} in #{db_name} at #{@cli.dest_host}: `#{sql}`"
       dest_conn.run(sql)
     end
-
-    # subs = dest_conn.fetch("SELECT * FROM pg_subscription WHERE subname='#{sub_name}'")
-    # if subs.count > 0
-    #   puts "Subscription #{sub_name} in #{db_name} at #{@cli.dest_host} already exists"
-    #   return
-    # end
-    #
-    # sql = "CREATE SUBSCRIPTION #{sub_name} CONNECTION 'user=#{@cli.src_user} #{"password=#{@cli.src_password}" if @cli.src_password.present?} host=#{@cli.src_host} port=#{@cli.src_port} dbname=#{db_name}' PUBLICATION #{pub_name}"
-    # puts "Create subscription #{sub_name} in #{db_name} at #{@cli.dest_host}: `#{sql}`"
-    # dest_conn.run(sql)
   end
 
   # AT DEST
