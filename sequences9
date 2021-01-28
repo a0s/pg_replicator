@@ -8,9 +8,12 @@ cli.src_databases.each do |db_name|
   src = Sequel.connect("postgres://#{cli.src_user}:#{cli.src_password}@#{cli.src_host}:#{cli.src_port}/#{db_name}")
   dest = Sequel.connect("postgres://#{cli.dest_user}:#{cli.dest_password}@#{cli.dest_host}:#{cli.dest_port}/#{db_name}")
 
-  res = src.fetch("SELECT * FROM pg_sequences WHERE last_value IS NOT NULL")
-  res.each do |r|
-    puts "#{r[:sequencename]}\t#{r[:last_value]}"
-    dest.run("SELECT setval('#{r[:sequencename]}', #{r[:last_value]})")
+  seq_names = src.fetch("SELECT sequence_name FROM information_schema.sequences").map{|r| r[:sequence_name]}
+  seq_names.each do |seq_name|
+    query = src.fetch("SELECT last_value FROM #{seq_name}")
+    next if query.count == 0
+    value = query.first[:last_value]
+    puts "#{seq_name}\t#{value}"
+    dest.run("SELECT setval('#{seq_name}', #{value})")
   end
 end
