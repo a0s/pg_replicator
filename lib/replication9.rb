@@ -19,23 +19,6 @@ class Replication9 < Replication
     "#{sub_name}_dest"
   end
 
-  def tables_without_primary_key
-    <<-EOS
-      select tab.table_schema,
-       tab.table_name
-      from information_schema.tables tab
-      left join information_schema.table_constraints tco 
-                on tab.table_schema = tco.table_schema
-                and tab.table_name = tco.table_name 
-                and tco.constraint_type = 'PRIMARY KEY'
-      where tab.table_type = 'BASE TABLE'
-            and tab.table_schema not in ('pg_catalog', 'information_schema')
-            and tco.constraint_name is null
-      order by table_schema,
-               table_name;
-    EOS
-  end
-
   # AT SRC
   def start_publication(db_name)
     pub_name = name(db_name)
@@ -63,7 +46,7 @@ class Replication9 < Replication
     sql  = "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';"
     tables = src_conn.fetch(sql).map { |s| s[:table_name] }
 
-    exclude_tables = src_conn.fetch(tables_without_primary_key).map { |s| s[:table_name] }
+    exclude_tables = src_conn.fetch(sql_tables_without_primary_key).map { |s| s[:table_name] }
     puts "!!!! (no primary key) SKIP TABLES: #{exclude_tables.join(',')}"
 
     (tables - exclude_tables).each do |table|

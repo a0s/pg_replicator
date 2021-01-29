@@ -7,4 +7,5 @@ rp = Replication.new(cli: cli)
 cli.src_databases.each do |db_name|
   rp.stop_subscription(db_name)
   rp.stop_publication(db_name)
+  rp.disable_full_identity(db_name)
 end
